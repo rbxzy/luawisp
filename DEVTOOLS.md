@@ -126,26 +126,126 @@ if (result.success && result.ast) {
 ```json
 [
     {
-        "type": "VarDeclStmt",
+        "type": "VariableStmt",
+        "name": {
+            "type": "IDENTIFIER",
+            "lexeme": "x",
+            "literal": null,
+            "loc": {
+                "line": 1,
+                "col": 6,
+                "len": 1
+            }
+        },
+        "value": {
+            "type": "LiteralExpr",
+            "token": {
+                "type": "NUMBER",
+                "lexeme": "42",
+                "literal": 42,
+                "loc": {
+                    "line": 1,
+                    "col": 10,
+                    "len": 2
+                }
+            },
+            "loc": {
+                "line": 1,
+                "col": 10,
+                "len": 2
+            }
+        },
         "isLocal": true,
-        "name": "x",
-        "initializer": {
-            "type": "NumberLiteral",
-            "value": 42
+        "loc": {
+            "line": 1,
+            "col": 0,
+            "len": 12
         }
     },
     {
-        "type": "FunctionCallStmt",
-        "name": "print",
-        "args": [
-            {
-                "type": "Identifier",
-                "name": "x"
+        "type": "ExpressionStmt",
+        "expression": {
+            "type": "CallExpr",
+            "callee": {
+                "type": "VarExpr",
+                "name": {
+                    "type": "IDENTIFIER",
+                    "lexeme": "print",
+                    "literal": null,
+                    "loc": {
+                        "line": 2,
+                        "col": 0,
+                        "len": 5
+                    }
+                },
+                "loc": {
+                    "line": 2,
+                    "col": 0,
+                    "len": 5
+                }
+            },
+            "args": [
+                {
+                    "type": "VarExpr",
+                    "name": {
+                        "type": "IDENTIFIER",
+                        "lexeme": "x",
+                        "literal": null,
+                        "loc": {
+                            "line": 2,
+                            "col": 6,
+                            "len": 1
+                        }
+                    },
+                    "loc": {
+                        "line": 2,
+                        "col": 6,
+                        "len": 1
+                    }
+                }
+            ],
+            "loc": {
+                "line": 2,
+                "col": 0,
+                "len": 8
             }
-        ]
+        },
+        "loc": {
+            "line": 2,
+            "col": 0,
+            "len": 8
+        }
     }
 ]
 ```
+
+### Location Information
+
+Every node in the AST includes a `loc` (location) object with:
+- `line`: Line number (1-indexed)
+- `col`: Column number (0-indexed)
+- `len`: Length of the token/expression in characters
+
+This makes it easy to trace errors back to the exact position in source code.
+
+**Use Case: Highlighting Errors in CodeMirror**
+
+With basic math using `line`, `col`, and `len`, you can easily highlight syntax errors in text editors like CodeMirror:
+
+```javascript
+// Example: Highlight an error in CodeMirror
+function highlightError(editor, error) {
+    const { line, col, len } = error.loc;
+    
+    editor.markText(
+        { line: line - 1, ch: col },        // Start position (line is 1-indexed, convert to 0-indexed)
+        { line: line - 1, ch: col + len },  // End position
+        { className: 'syntax-error' }       // CSS class for styling
+    );
+}
+```
+
+This location data enables real-time error highlighting, go-to-definition features, and other IDE functionality.
 
 ---
 
