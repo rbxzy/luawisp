@@ -280,8 +280,8 @@ You can define JavaScript code that gets prepended to all successful compilation
 ```typescript
 compiler.defineBoilerplate(`
 // Implementations for registered functions
-function print(...args) {
-    console.log(...args);
+function print(...args: any[]) {
+    console.log(args.join(" "));
 }
 
 async function wait(seconds) {
