@@ -677,7 +677,7 @@ The following keywords are reserved and cannot be used as variable names:
 - `this`
 - `if`, `then`, `else`, `elseif`, `end`
 - `while`, `do`, `repeat`, `until`
-- `for`, `in`
+- `for`
 - `break`, `return`
 - `and`, `or`, `not`
 - `true`, `false`, `nil`
