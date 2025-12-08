@@ -298,6 +298,17 @@ const sprite = { x: 0, y: 0 };  // ❌ Game engine provides this
 `);
 ```
 
+### Errors ###
+Errors are simple, and structured like this
+```typescript
+{
+  lexer: [],
+  parser: [],
+  transpiler: [ Err { error: 'Undefined variable.', line: 1, col: 6, len: 1 } ]
+}
+```
+
+
 ### Complete Example
 
 ```typescript
@@ -506,5 +517,3 @@ compiler.clearCustomRegistrations();
 ```
 
 ---
-
-For DSL syntax documentation, see [SYNTAX.md](./SYNTAX.md).
