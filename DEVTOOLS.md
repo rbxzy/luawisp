@@ -9,14 +9,21 @@ This guide covers debugging tools, error handling, and syntax tree inspection av
 ## Setup
 
 ```javascript
-const { LuaWisp, getTotalErrorCount, highlightErrs, printAST } = require('@codewisp/lua-transpiler');
+const { LuaWisp, getTotalErrorCount, highlightErrs, printAST, stringify } = require('@codewisp/lua-transpiler');
 
 const compiler = new LuaWisp();
-compiler.registerFunction("print", -1);
+
+// Register functions with optional argument type checking
+compiler.registerFunction("print", -1);  // Variadic, no type checking
+compiler.registerFunction("split", 2);   // 2 arguments, no type checking
+compiler.registerFunction("random", 2, ["number", "number"]);  // Type-checked arguments
 
 compiler.defineBoilerplate(`
 function print(...args) {
     console.log(args.join(" "));
+}
+function random(min, max) { 
+    return Math.random() * (max - min) + min; 
 }
 `);
 ```
@@ -256,20 +263,70 @@ const {
     LuaWisp, 
     getTotalErrorCount, 
     highlightErrs, 
-    printAST 
+    printAST,
+    stringify 
 } = require('@codewisp/lua-transpiler');
 
 const compiler = new LuaWisp();
+
+// Register functions with type checking
 compiler.registerFunction("print", -1);
+compiler.registerFunction("split", 2);
+compiler.registerFunction("move", 2);
+compiler.registerFunction("rotate", 1);
+compiler.registerFunction("reset", 0);
+compiler.registerFunction("sqrt", 1);
+compiler.registerFunction("round", 1);
+compiler.registerFunction("random", 2, ["number", "number"]);
+
+// Register built-in objects with typed methods
+compiler.registerBuiltinObject("sprite", {
+    // Properties
+    x: { isFunction: false },
+    y: { isFunction: false },
+    visible: { isFunction: false },
+    size: { isFunction: false },
+    width: { isFunction: false },
+    height: { isFunction: false },
+    costume: { isFunction: false },
+    layer: { isFunction: false },
+    transparency: { isFunction: false },
+    brightness: { isFunction: false },
+    
+    // Methods with type checking
+    setCostume: { isFunction: true, argsLen: 1, argTypes: ["string"] },
+    nextCostume: { isFunction: true, argsLen: 0 },
+    prevCostume: { isFunction: true, argsLen: 0 },
+    getCostume: { isFunction: true, argsLen: 0 },
+    pointTowards: { isFunction: true, argsLen: 2, argTypes: ["number", "number"] }
+});
+
 compiler.defineBoilerplate(`
+function move(x, y) { sprite.x += x; sprite.y += y; }
+function rotate(z) { sprite.rotation = z; }
+function reset() { sprite.x = 0; sprite.y = 0; }
+function round(n) { return Math.round(n); }
+function sqrt(n) { return Math.sqrt(n); }
+function random(min, max) { return Math.random() * (max - min) + min; }
+
+let sprite = {
+    x: 0,
+    y: 0,
+    visible: true,
+    setCostume: (name) => { console.log("Setting costume:", name); },
+    pointTowards: (x, y) => { console.log("Pointing to:", x, y); }
+};
+
 function print(...args) {
     console.log(args.join(" "));
 }
 `);
 
 const sourceCode = `
-local greeting = "Hello, World!"
-print(greeting)
+local x = 10
+sprite.pointTowards(x, 20)
+sprite.setCostume("hero")
+print("Position:", sprite.x, sprite.y)
 `;
 
 const result = compiler.compile(sourceCode);
@@ -281,7 +338,7 @@ if (result.success) {
     console.log(`Token count: ${result.tokens.length}`);
     
     console.log("\n=== AST ===");
-    printAST(result.ast);
+    console.log(stringify(result.ast, 4));
     
     console.log("\n=== Output ===");
     console.log("Raw (no boilerplate):");
@@ -301,6 +358,20 @@ if (result.success) {
 }
 ```
 
+### Type Checking Example
+
+```javascript
+// This will produce a type error during compilation
+const badCode = `
+sprite.pointTowards(0, "hello")  -- Error: Expected number, got string
+sprite.setCostume(123)           -- Error: Expected string, got number
+`;
+
+const badResult = compiler.compile(badCode);
+// badResult.success will be false
+// badResult.errors.transpiler will contain type mismatch errors
+```
+
 ---
 
 ## API Reference
@@ -310,6 +381,60 @@ if (result.success) {
 | `getTotalErrorCount(errors)` | Returns total number of errors across all stages |
 | `highlightErrs(errors, source)` | Logs all errors with visual highlighting |
 | `printAST(ast)` | Logs the syntax tree as formatted JSON |
+| `stringify(obj, indent)` | Custom JSON stringification utility |
+
+### Compiler Methods
+
+| Method | Description |
+|--------|-------------|
+| `registerFunction(name, argsLen, argTypes?)` | Register a function with optional type checking |
+| `registerBuiltinObject(name, properties)` | Register an object with properties and typed methods |
+| `registerReservedDeclaration(name)` | Register a reserved declaration name |
+| `registerReservedFunction(dslName, jsName)` | Map DSL function name to JS output name |
+| `defineBoilerplate(code)` | Set boilerplate code prepended to output |
+| `compile(source)` | Compile source code and return result |
+
+### Type Checking
+
+When registering functions or object methods, you can specify argument types using the `argTypes` parameter:
+
+**Supported Types:**
+- `"string"` - String literals and expressions
+- `"number"` - Number literals and expressions  
+- `"boolean"` - Boolean literals (true/false)
+- `"null"` - Null literal
+- `"unknown"` - Expressions whose type cannot be determined at compile time
+
+**Examples:**
+
+```javascript
+// Function with type checking
+compiler.registerFunction("random", 2, ["number", "number"]);
+
+// Object method with type checking
+compiler.registerBuiltinObject("sprite", {
+    setCostume: { 
+        isFunction: true, 
+        argsLen: 1, 
+        argTypes: ["string"] 
+    },
+    pointTowards: { 
+        isFunction: true, 
+        argsLen: 2, 
+        argTypes: ["number", "number"] 
+    }
+});
+```
+
+**Type Errors:**
+
+Type mismatches are caught during compilation and reported in `result.errors.transpiler`:
+
+```javascript
+// This code will fail type checking
+sprite.pointTowards(0, "hello")  // Error: Argument 2 expects number, got string
+sprite.setCostume(42)            // Error: Argument 1 expects string, got number
+```
 
 ### Result Properties
 
@@ -331,6 +456,9 @@ if (result.success) {
 - Always check `result.success` before accessing output
 - Use `getTotalErrorCount()` for quick error summary
 - Use `highlightErrs()` during development for debugging
-- Use `printAST()` to understand how code is parsed
+- Use `printAST()` or `stringify(result.ast, 4)` to understand how code is parsed
 - Use `result.raw` when you don't want boilerplate
 - Use `result.final` for complete runnable code
+- Add `argTypes` to functions/methods for compile-time type checking
+- Type checking only works for registered functions and built-in object methods
+- Use `"unknown"` type for arguments that accept any expression type
