@@ -110,6 +110,9 @@ local str = "hello there!
 
 x = unknown_var + 5
     ^-- Variable 'unknown_var' is not defined.
+
+sprite.pointTowards(0, "hello")
+                       ^^^^^^^-- Function 'pointTowards' expected 'number'.
 ```
 
 **Note:** `highlightErrs()` logs directly to the console. For debugging only.
@@ -365,11 +368,26 @@ if (result.success) {
 const badCode = `
 sprite.pointTowards(0, "hello")  -- Error: Expected number, got string
 sprite.setCostume(123)           -- Error: Expected string, got number
+random("min", "max")             -- Error: Expected number arguments
 `;
 
 const badResult = compiler.compile(badCode);
+
 // badResult.success will be false
 // badResult.errors.transpiler will contain type mismatch errors
+
+if (!badResult.success) {
+    highlightErrs(badResult.errors, badCode);
+    // Output:
+    // sprite.pointTowards(0, "hello")
+    //                        ^^^^^^^-- Function 'pointTowards' expected 'number'.
+    //
+    // sprite.setCostume(123)
+    //                   ^^^-- Function 'setCostume' expected 'string'.
+    //
+    // random("min", "max")
+    //        ^^^^^-- Function 'random' expected 'number'.
+}
 ```
 
 ---
