@@ -4,6 +4,21 @@
 
 This guide covers debugging tools, error handling, and syntax tree inspection available in LuaWisp.
 
+### Table of Contents
+- [Setup](#setup)
+- [Compilation Result](#compilation-result)
+- [Error Handling](#error-handling)
+- [Syntax Tree Inspection](#syntax-tree-inspection)
+- [Compiler Configuration](#compiler-configuration)
+  - [Registering Functions](#registering-functions)
+  - [Registering Built-in Objects](#registering-built-in-objects)
+  - [Registering Reserved Declarations](#registering-reserved-declarations)
+  - [Registering Reserved Functions](#registering-reserved-functions)
+  - [Defining Boilerplate](#defining-boilerplate)
+- [Complete Example](#complete-example)
+- [API Reference](#api-reference)
+- [Tips](#tips)
+
 ---
 
 ## Setup
@@ -256,6 +271,439 @@ function highlightError(editor, error) {
 ```
 
 This location data enables real-time error highlighting, go-to-definition features, and other IDE functionality.
+
+---
+
+## Compiler Configuration
+
+The LuaWisp compiler provides several methods to customize its behavior and define your DSL's semantics.
+
+### Registering Functions
+
+Use `registerFunction()` to make functions available globally in your DSL code.
+
+**Signature:**
+```javascript
+compiler.registerFunction(name, argsLen, argTypes?)
+```
+
+**Parameters:**
+- `name` (string) - Function name as it appears in DSL code
+- `argsLen` (number) - Number of expected arguments, or `-1` for variadic (any number)
+- `argTypes` (array, optional) - Array of type strings for compile-time type checking
+
+**Examples:**
+
+```javascript
+// Simple function with 2 arguments, no type checking
+compiler.registerFunction("split", 2);
+
+// Variadic function (accepts any number of arguments)
+compiler.registerFunction("print", -1);
+
+// Function with type-checked arguments
+compiler.registerFunction("random", 2, ["number", "number"]);
+
+// Single-argument function with type checking
+compiler.registerFunction("sqrt", 1, ["number"]);
+
+// No-argument function
+compiler.registerFunction("getCurrentTime", 0);
+```
+
+**Usage in DSL:**
+```lua
+local result = split("hello,world", ",")
+print("Hello", "World", 123)
+local num = random(1, 100)
+```
+
+**Important Notes:**
+- Functions must be registered before compilation
+- Type checking is optional but recommended for catching errors early
+- Variadic functions (`argsLen: -1`) cannot have type checking
+- You must implement the actual function in your boilerplate or runtime
+
+---
+
+### Registering Built-in Objects
+
+Use `registerBuiltinObject()` to define objects with properties and methods that are always available.
+
+**Signature:**
+```javascript
+compiler.registerBuiltinObject(name, properties)
+```
+
+**Parameters:**
+- `name` (string) - Object name as it appears in DSL code
+- `properties` (object) - Map of property/method definitions
+
+**Property Definition Format:**
+```javascript
+{
+    propertyName: {
+        isFunction: boolean,      // true for methods, false for properties
+        argsLen?: number,         // Required if isFunction is true
+        argTypes?: string[]       // Optional type checking for methods
+    }
+}
+```
+
+**Examples:**
+
+```javascript
+// Simple object with properties only
+compiler.registerBuiltinObject("game", {
+    score: { isFunction: false },
+    level: { isFunction: false },
+    paused: { isFunction: false }
+});
+
+// Object with methods and properties
+compiler.registerBuiltinObject("sprite", {
+    // Properties
+    x: { isFunction: false },
+    y: { isFunction: false },
+    visible: { isFunction: false },
+    
+    // Methods without type checking
+    show: { isFunction: true, argsLen: 0 },
+    hide: { isFunction: true, argsLen: 0 },
+    
+    // Methods with type checking
+    moveTo: { isFunction: true, argsLen: 2, argTypes: ["number", "number"] },
+    setCostume: { isFunction: true, argsLen: 1, argTypes: ["string"] },
+    say: { isFunction: true, argsLen: 1, argTypes: ["string"] }
+});
+
+// Math utilities object
+compiler.registerBuiltinObject("Math", {
+    PI: { isFunction: false },
+    E: { isFunction: false },
+    abs: { isFunction: true, argsLen: 1, argTypes: ["number"] },
+    max: { isFunction: true, argsLen: 2, argTypes: ["number", "number"] },
+    min: { isFunction: true, argsLen: 2, argTypes: ["number", "number"] }
+});
+```
+
+**Usage in DSL:**
+```lua
+-- Properties
+sprite.x = 100
+sprite.y = 200
+local currentX = sprite.x
+
+-- Methods
+sprite.show()
+sprite.moveTo(50, 75)
+sprite.setCostume("hero_walk")
+sprite.say("Hello!")
+
+-- Math object
+local distance = Math.abs(-10)
+local highest = Math.max(score, highScore)
+```
+
+**Important Notes:**
+- Built-in objects are automatically available without declaration
+- You must implement the actual object and its methods in your boilerplate
+- Type checking helps catch errors like `sprite.moveTo("50", "75")` at compile time
+- Properties can be read and written: `sprite.x = 10` or `local x = sprite.x`
+
+---
+
+### Registering Reserved Declarations
+
+Use `registerReservedDeclaration()` to make variable names always available without requiring declaration.
+
+**Signature:**
+```javascript
+compiler.registerReservedDeclaration(name)
+```
+
+**Parameters:**
+- `name` (string) - Variable name to reserve
+
+**Examples:**
+
+```javascript
+// Reserve common game objects
+compiler.registerReservedDeclaration("player");
+compiler.registerReservedDeclaration("enemy");
+compiler.registerReservedDeclaration("background");
+
+// Reserve utility objects
+compiler.registerReservedDeclaration("Input");
+compiler.registerReservedDeclaration("Audio");
+compiler.registerReservedDeclaration("Storage");
+```
+
+**Usage in DSL:**
+```lua
+-- These can be used without 'local' declaration
+player.health = 100
+enemy.spawn(10, 20)
+background.color = "blue"
+
+Input.onKeyPress("space", function()
+    player.jump()
+end)
+```
+
+**Use Cases:**
+- Global game objects (player, world, camera)
+- Singleton services (Input, Audio, Network)
+- API namespaces (UI, Physics, Storage)
+- Constants or configuration objects
+
+**Important Notes:**
+- Reserved declarations are treated as always defined
+- They cannot be redeclared with `local`
+- You must provide the actual implementation in your runtime
+
+---
+
+### Registering Reserved Functions
+
+Use `registerReservedFunction()` to map DSL function names to different JavaScript output names.
+
+**Signature:**
+```javascript
+compiler.registerReservedFunction(dslName, jsName)
+```
+
+**Parameters:**
+- `dslName` (string) - Function name in DSL code
+- `jsName` (string) - Function name in transpiled JavaScript
+
+**Examples:**
+
+```javascript
+// Map DSL event handlers to runtime functions
+compiler.registerReservedFunction("_onStart", "onGameStart");
+compiler.registerReservedFunction("_onUpdate", "onGameUpdate");
+compiler.registerReservedFunction("_onCollision", "onCollisionDetected");
+
+// Map DSL control flow to runtime wrappers
+compiler.registerReservedFunction("_forever", "foreverLoop");
+compiler.registerReservedFunction("_repeat", "repeatTimes");
+compiler.registerReservedFunction("_wait", "waitAsync");
+
+// Map DSL sugar to JavaScript equivalents
+compiler.registerReservedFunction("_clone", "structuredClone");
+compiler.registerReservedFunction("_typeof", "typeof");
+```
+
+**Usage in DSL:**
+```lua
+_onStart(function()
+    print("Game started!")
+end)
+
+_onUpdate(function(deltaTime)
+    player.update(deltaTime)
+end)
+
+_forever(function()
+    enemy.patrol()
+    _wait(1)
+end)
+
+_repeat(10, function()
+    spawnEnemy()
+end)
+```
+
+**Transpiles to:**
+```javascript
+onGameStart(() => {
+    print("Game started!");
+});
+
+onGameUpdate((deltaTime) => {
+    player.update(deltaTime);
+});
+
+foreverLoop(() => {
+    enemy.patrol();
+    waitAsync(1);
+});
+
+repeatTimes(10, () => {
+    spawnEnemy();
+});
+```
+
+**Use Cases:**
+- Event handler registration (onClick, onStart, onCollision)
+- Async/await wrappers (wait, sleep, delay)
+- Custom control flow (forever, repeat, until)
+- Language bridges (mapping DSL syntax to framework APIs)
+
+**Important Notes:**
+- Reserved functions are purely a transpilation mapping
+- You must implement the actual JavaScript function in your runtime
+- Useful for creating DSL-friendly syntax that maps to your game engine's API
+
+---
+
+### Defining Boilerplate
+
+Use `defineBoilerplate()` to prepend JavaScript/TypeScript code to every compilation output.
+
+**Signature:**
+```javascript
+compiler.defineBoilerplate(code)
+```
+
+**Parameters:**
+- `code` (string) - JavaScript/TypeScript code to prepend
+
+**Examples:**
+
+**Basic Runtime Functions:**
+```javascript
+compiler.defineBoilerplate(`
+function print(...args) {
+    console.log(args.join(" "));
+}
+
+function wait(seconds) {
+    return new Promise(resolve => setTimeout(resolve, seconds * 1000));
+}
+
+function random(min, max) {
+    return Math.random() * (max - min) + min;
+}
+`);
+```
+
+**Game Engine Integration:**
+```javascript
+compiler.defineBoilerplate(`
+// Import game engine
+import { Sprite, Input, Audio } from './gameEngine';
+
+// Global game objects
+const sprite = new Sprite();
+const player = new Sprite();
+const enemy = new Sprite();
+
+// Helper functions
+function move(x, y) {
+    sprite.x += x;
+    sprite.y += y;
+}
+
+function rotate(angle) {
+    sprite.rotation = angle;
+}
+
+// Event handlers
+const eventHandlers = {
+    onStart: [],
+    onUpdate: []
+};
+
+function onGameStart(callback) {
+    eventHandlers.onStart.push(callback);
+}
+
+function onGameUpdate(callback) {
+    eventHandlers.onUpdate.push(callback);
+}
+
+// Start game loop
+gameEngine.run(eventHandlers);
+`);
+```
+
+**Async Wrapper:**
+```javascript
+compiler.defineBoilerplate(`
+(async function() {
+    // Helper functions
+    function wait(seconds) {
+        return new Promise(resolve => setTimeout(resolve, seconds * 1000));
+    }
+    
+    function forever(callback) {
+        return (async function loop() {
+            while (true) {
+                await callback();
+            }
+        })();
+    }
+    
+    // User code starts here
+    try {
+`);
+
+// Note: You might need to close the try-catch and async function
+// in your transpiler's output
+```
+
+**Type Definitions (TypeScript):**
+```javascript
+compiler.defineBoilerplate(`
+interface Sprite {
+    x: number;
+    y: number;
+    visible: boolean;
+    moveTo(x: number, y: number): void;
+    show(): void;
+    hide(): void;
+}
+
+interface GameAPI {
+    score: number;
+    level: number;
+    pause(): void;
+    resume(): void;
+}
+
+declare const sprite: Sprite;
+declare const game: GameAPI;
+
+function print(...args: any[]): void {
+    console.log(args.join(" "));
+}
+`);
+```
+
+**Use Cases:**
+- Import statements for external libraries
+- Polyfills and helper functions
+- Global object initialization
+- Type definitions for TypeScript
+- Async/await wrappers
+- Runtime setup code
+- API bridges to game engines or frameworks
+
+**Important Notes:**
+- Boilerplate is prepended to EVERY compilation
+- Access the output with boilerplate via `result.output` or `result.final`
+- Access raw output without boilerplate via `result.raw`
+- Keep boilerplate lightweight to avoid bloating output
+- Consider using ES modules and imports instead of copying code
+
+**Boilerplate Strategy:**
+```javascript
+// Minimal boilerplate - just imports
+compiler.defineBoilerplate(`
+import * as runtime from './runtime';
+const { print, wait, sprite, player } = runtime;
+`);
+
+// Full boilerplate - self-contained
+compiler.defineBoilerplate(`
+// Everything defined inline
+function print(...args) { console.log(args.join(" ")); }
+const sprite = { x: 0, y: 0, show() {}, hide() {} };
+// ... more code
+`);
+```
 
 ---
 
