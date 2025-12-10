@@ -481,14 +481,14 @@ compiler.registerReservedFunction(dslName, jsName)
 
 ```javascript
 // Map DSL event handlers to runtime functions
-compiler.registerReservedFunction("_onStart", "onGameStart");
-compiler.registerReservedFunction("_onUpdate", "onGameUpdate");
-compiler.registerReservedFunction("_onCollision", "onCollisionDetected");
+compiler.registerReservedFunction("_onStart", "onStart");
+compiler.registerReservedFunction("_onUpdate", "onUpdate");
+compiler.registerReservedFunction("_onCollision", "onCollision");
 
 // Map DSL control flow to runtime wrappers
-compiler.registerReservedFunction("_forever", "foreverLoop");
-compiler.registerReservedFunction("_repeat", "repeatTimes");
-compiler.registerReservedFunction("_wait", "waitAsync");
+compiler.registerReservedFunction("_forever", "forever");
+compiler.registerReservedFunction("_repeat", "repeat");
+compiler.registerReservedFunction("_wait", "wait");
 
 // Map DSL sugar to JavaScript equivalents
 compiler.registerReservedFunction("_clone", "structuredClone");
@@ -497,40 +497,40 @@ compiler.registerReservedFunction("_typeof", "typeof");
 
 **Usage in DSL:**
 ```lua
-_onStart(function()
+function _onStart()
     print("Game started!")
-end)
+end
 
-_onUpdate(function(deltaTime)
+function _onUpdate(deltaTime)
     player.update(deltaTime)
-end)
+end
 
-_forever(function()
+function _forever()
     enemy.patrol()
     _wait(1)
-end)
+end
 
-_repeat(10, function()
+function _repeat(times)
     spawnEnemy()
-end)
+end
 ```
 
 **Transpiles to:**
 ```javascript
-onGameStart(() => {
+onStart(() => {
     print("Game started!");
 });
 
-onGameUpdate((deltaTime) => {
+onUpdate((deltaTime) => {
     player.update(deltaTime);
 });
 
-foreverLoop(() => {
+forever(() => {
     enemy.patrol();
-    waitAsync(1);
+    wait(1);
 });
 
-repeatTimes(10, () => {
+repeat((times) => {
     spawnEnemy();
 });
 ```
@@ -543,8 +543,11 @@ repeatTimes(10, () => {
 
 **Important Notes:**
 - Reserved functions are purely a transpilation mapping
+- DSL function definitions with reserved names are converted to callback-style calls
+- The DSL name is replaced with the JS name during transpilation
 - You must implement the actual JavaScript function in your runtime
 - Useful for creating DSL-friendly syntax that maps to your game engine's API
+- Common pattern: prefix DSL reserved functions with `_` to distinguish them
 
 ---
 
